@@ -39,3 +39,47 @@ The project follows a clean layered architecture:
 
 ## Reliability
 The system is designed to continue risk evaluation even if external services (e.g., weather APIs) are unavailable, ensuring stable and consistent results.
+
+## How to Run the Project
+
+### Prerequisites
+- Node.js (v18 or later)
+- MongoDB (local or MongoDB Atlas)
+- npm
+
+---
+
+### Backend Setup
+
+1. Navigate to the backend directory:
+   ``` bash
+   cd back-end
+3. Install dependencies:
+   ``` bash
+   npm install
+5. Create a .env file in the backend folder:
+   ``` bash
+   MONGO_URI=your_mongodb_connection_string
+   PORT=5000
+7. Start the backend server:
+   ``` bash
+   npm start
+The backend will run at:
+```bash
+http://localhost:5000
+```
+
+### Frontend Setup
+1. Navigate to the frontend directory
+   ``` bash
+   cd front-end
+2. Install dependencies
+   ``` bash
+   npm install
+3. Start the React application
+   ``` bash
+   npm start
+The frontend will run at
+```bash
+http://localhost:3000
+```
