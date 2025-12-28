@@ -2,31 +2,30 @@ const { Point, Daily } = require("meteostat");
 
 async function getWeatherSeverity(lat, lon) {
   try {
-    const location = new Point(lat, lon);
-
+    const point = new Point(lat, lon);
     const start = new Date();
     start.setDate(start.getDate() - 3);
     const end = new Date();
 
-    const data = await Daily.fetch(location, start, end);
+    start.setDate(start.getDate() - 7);
+
+    const data = await Daily.fetch(point, start, end);
 
     if (!data || data.length === 0) {
-      return 0.3; // safe default
+      throw new Error("No weather data");
     }
 
-    let severity = 0;
+    // Use average temperature deviation as severity proxy
+    const avgTemp =
+      data.reduce((sum, d) => sum + (d.tavg || 0), 0) / data.length;
 
-    data.forEach(day => {
-      if (day.prcp && day.prcp > 20) severity += 0.3;
-      if (day.wspd && day.wspd > 15) severity += 0.3;
-      if (day.tmin !== null && day.tmin < 0) severity += 0.2;
-      if (day.tmax !== null && day.tmax > 40) severity += 0.2;
-    });
+    // Normalize to 0–1 range
+    const severity = Math.min(Math.abs(avgTemp) / 40, 1);
 
-    return Math.min(severity, 1);
+    return Number(severity.toFixed(2));
   } catch (err) {
-    console.error("Weather API failed, using default severity");
-    return 0.3; // fallback
+    console.warn("Weather API failed, using fallback");
+    return 0.3; // fallback severity
   }
 }
 
