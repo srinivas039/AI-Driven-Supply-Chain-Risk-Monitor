@@ -9,6 +9,7 @@ const haversineDistance = require("../utils/distance");
 const transportSpeed = require("../utils/transportspeed");
 const calculateDelay = require("../utils/calculateDelay");
 const calculateFinalRisk = require("../utils/finalRisk");
+const countryCoordinates = require("../utils/locationMap");
 
 const router = express.Router();
 
@@ -20,19 +21,44 @@ router.post("/:id", async (req, res) => {
       return res.status(404).json({ error: "Shipment not found" });
     }
 
-    // 2️⃣ Resolve coordinates
+    /* ===== DEBUG START ===== */
+    console.log("RAW ORIGIN:", shipment.origin);
+    console.log("RAW DESTINATION:", shipment.destination);
+    console.log("RAW TRANSPORT:", shipment.transportMode);
+    /* ===== DEBUG END ===== */
+
+    // 2️⃣ Resolve coordinates with fallback
     let originCoords, destinationCoords;
+
     try {
       originCoords = await geocodeLocation(shipment.origin);
+    } catch {
+      originCoords = countryCoordinates[shipment.origin];
+    }
+
+    try {
       destinationCoords = await geocodeLocation(shipment.destination);
-    } catch (err) {
+    } catch {
+      destinationCoords = countryCoordinates[shipment.destination];
+    }
+
+    /* ===== DEBUG START ===== */
+    console.log("ORIGIN COORDS:", originCoords);
+    console.log("DESTINATION COORDS:", destinationCoords);
+    /* ===== DEBUG END ===== */
+
+    if (!originCoords || !destinationCoords) {
+      console.error("❌ Coordinate resolution failed");
       return res.status(400).json({
-        error: "Unable to resolve origin or destination coordinates"
+        error: "Unable to resolve coordinates for shipment"
       });
     }
 
-    // 3️⃣ Calculate distance
+    // 3️⃣ Distance calculation
     const distanceKm = haversineDistance(originCoords, destinationCoords);
+
+    /* ===== DEBUG ===== */
+    console.log("DISTANCE (km):", distanceKm);
 
     // 4️⃣ Weather severity
     const weatherSeverity = await getWeatherSeverity(
@@ -40,7 +66,10 @@ router.post("/:id", async (req, res) => {
       originCoords.lon
     );
 
-    // 5️⃣ Initial risk (contextual)
+    /* ===== DEBUG ===== */
+    console.log("WEATHER SEVERITY:", weatherSeverity);
+
+    // 5️⃣ Initial contextual risk
     const riskContext = await analyzeRisk({
       originRisk: 0.6,
       destinationRisk: 0.4,
@@ -48,11 +77,19 @@ router.post("/:id", async (req, res) => {
       transportMode: shipment.transportMode
     });
 
-    // 6️⃣ Use USER-SELECTED transport (IMPORTANT)
-    const transportMode = shipment.transportMode;
+    /* ===== DEBUG ===== */
+    console.log("RISK CONTEXT:", riskContext);
+
+    // 6️⃣ Respect USER-selected transport
+    const transportMode = shipment.transportMode.charAt(0).toUpperCase() + shipment.transportMode.slice(1).toLowerCase();
     const speed = transportSpeed[transportMode];
 
+    /* ===== DEBUG ===== */
+    console.log("TRANSPORT MODE USED:", transportMode);
+    console.log("TRANSPORT SPEED:", speed);
+
     if (!speed) {
+      console.error("❌ Invalid transport mode");
       return res.status(400).json({ error: "Invalid transport mode" });
     }
 
@@ -60,7 +97,12 @@ router.post("/:id", async (req, res) => {
     const delayDays = calculateDelay(baseDays, riskContext.riskLevel);
     const totalETA = baseDays + delayDays;
 
-    // 7️⃣ Final risk calculation
+    /* ===== DEBUG ===== */
+    console.log("BASE DAYS:", baseDays);
+    console.log("DELAY DAYS:", delayDays);
+    console.log("TOTAL ETA:", totalETA);
+
+    // 7️⃣ Final risk score
     const finalRisk = calculateFinalRisk({
       weatherRisk: weatherSeverity,
       distanceKm,
@@ -69,7 +111,10 @@ router.post("/:id", async (req, res) => {
       delayDays
     });
 
-    // 8️⃣ Persist EVERYTHING in MongoDB
+    /* ===== DEBUG ===== */
+    console.log("FINAL RISK:", finalRisk);
+
+    // 8️⃣ Persist to MongoDB
     shipment.originCoords = originCoords;
     shipment.destinationCoords = destinationCoords;
 
@@ -86,11 +131,13 @@ router.post("/:id", async (req, res) => {
 
     await shipment.save();
 
-    // 9️⃣ Respond with updated shipment
+    console.log("Shipment updated successfully");
+
+    // 9️⃣ Respond
     res.json(shipment);
 
   } catch (err) {
-    console.error("Risk route error:", err);
+    console.error("❌ Risk route fatal error:", err);
     res.status(500).json({ error: "Risk analysis failed" });
   }
 });
