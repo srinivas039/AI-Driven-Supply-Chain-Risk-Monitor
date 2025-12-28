@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE_URL = "https://ai-driven-supply-chain-risk-monitor-3.onrender.com/api";
+const BASE_URL = "REACT_APP_API_URL";
 
 export const getShipments = () => {
   return axios.get(`${BASE_URL}/shipments`);
